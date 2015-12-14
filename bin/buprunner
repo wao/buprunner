@@ -1,0 +1,79 @@
+#!/usr/bin/env ruby
+
+ENV['BUNDLE_GEMFILE']=File.dirname( File.realpath( __FILE__ ) ) + "/../Gemfile"
+require 'bundler/setup'
+
+$:.push File.dirname( File.realpath( __FILE__ ) ) + "/../lib"
+
+require 'fileutils'
+require 'main'
+require 'bup_runner'
+
+include FileUtils
+include BupRunner
+
+# 1. Support mulitple repo or BUP_DIR
+# 2, Support sperate index file
+# 3, Support different backup dir
+# 4, Support steps and batch mode
+# 5, Support auto create repo if it missing
+
+
+#bup_root = "/media/yangchen/ts2t/buproot"
+
+#ENV["BUP_DIR"] = bup_root
+
+#if !File.exist? bup_root
+    #mkdir_p bup_root
+
+    #system( "bup init" )
+#end
+
+#if !File.directory? bup_root
+    #raise "Directory #{bup_root} should be a directory."
+#end
+
+
+
+#system( "bup index -uxpm --exclude-from ~/ignore.txt /home/yangchen" )
+#system( "bup save --strip-path /home/yangchen -n myhome /home/yangchen" )
+#system( "bup index -uxpm /media/yangchen/ext1t/photorepo" )
+#system( "bup save --strip-path /media/yangchen/ext1t -n ext1t /media/yangchen/ext1t/photorepo" )
+
+include BupRunner
+
+Main do
+    option 'config', 'c' do
+        optional
+        argument_required
+        cast Pathname
+        validate{ |p| p.exist? && p.file? }
+    end
+
+    def config_file 
+        if params[:config].given?
+            params[:config]
+        else
+            Pathname.new( "#{ENV['HOME']}/.buprunner.conf" )
+        end
+    end
+
+    def parse_config
+        @config = BackupConfig.load( config_file )
+    end
+
+    mode 'dump' do
+        def run
+            parse_config
+            @config.targets.each do |t|
+                puts "Target: %s" % t.name
+                puts "  path: %s" % t.path
+                puts
+            end
+
+            @config.repos.each do |r|
+                puts "Repos: %s" % t.name
+            end
+        end
+    end
+end
