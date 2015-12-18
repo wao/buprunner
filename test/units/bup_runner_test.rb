@@ -83,14 +83,49 @@ class BupRunnerTest < Minitest::Test
             assert_equal "newname", @config.targets["/a"].name
             assert_equal "b", @config.targets["/b"].name
         end
+
+        should 'allow add repo' do
+            @config.repo( "/usr/lib", "a" )
+
+            path = "/usr/lib/a"
+            assert @config.repos[path]
+            assert_equal Pathname.new(path), @config.repos[path].path
+        end
+
+        should 'select exist repo' do
+            @config.repo( "/usr/lib", "a" )
+            @config.repo( "/usr/lib2", "a" )
+            assert @config.select_repo
+            assert_equal Pathname.new("/usr/lib/a"), @config.select_repo.path
+
+        end
+
+        should 'report error  when select_repo and two repo exists' do
+            @config.repo( "/usr/lib", "a" )
+            @config.repo( "/usr/bin", "c" )
+
+            ex = assert_raises{ @config.select_repo }
+            assert_match /^Error: More.*/, ex.message
+        end
+
+        should 'report error  when select_repo and no repo exists' do
+            @config.repo( "/usr/lib2", "a" )
+            @config.repo( "/usr/bin2", "c" )
+
+            ex = assert_raises{ @config.select_repo }
+            assert_match /^Error: No.*/, ex.message
+        end
     end
 
     context 'a BupDriver' do
         setup do
             @target = BackupTarget.new( "/home/yangchen" )
             @repo = BackupRepo.new( "/media/yangchen", "repo" )
-            @driver = BupDriver.new( @target, @repo )
+            @driver = BupDriver.new( @repo, @target )
             @driver.dry_run = true
+        end
+
+        should 'raise error when two backup device avaliable' do
         end
 
         should "call init when index" do
@@ -111,10 +146,18 @@ class BupRunnerTest < Minitest::Test
         should "generate exclude_file for exclude" do
             paths = ["/a", "/b", "/c"]
             @target.exclude_path paths
-            @driver.verbose(true)
+            #@driver.verbose(true)
             FileUtils.rm_rf @driver.exclude_file
             @driver.index
             assert_equal paths, @driver.exclude_file.read.split("\n")
         end
+
+        should "add target path as prefix to exclude path if it is relative" do
+            paths = ["a", "b", "c"]
+            @target.exclude_path paths
+            #@driver.verbose(true)
+            FileUtils.rm_rf @driver.exclude_file
+            @driver.index
+            assert_equal paths.map{ |s| ( @target.path + s ).to_s }, @driver.exclude_file.read.split("\n")        end
     end
 end

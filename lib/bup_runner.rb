@@ -105,10 +105,10 @@ module BupRunner
         end
 
         def repo(mount_path, sub_path,&blk)
-            path = Pathname.new(mount_path) + sub_path
+            path = (Pathname.new(mount_path) + sub_path).to_s
             t = repos[path]
             if t.nil?
-                t = BackupRepo.new(path)
+                t = BackupRepo.new(mount_path, sub_path)
                 repos[path] = t
             end
 
@@ -117,8 +117,24 @@ module BupRunner
             end
         end
 
+        def select_repo
+            repos = self.repos.values.select{ |r| r.attached? } 
+            if repos.length > 1
+                raise "Error: More than one backup devices attached!:[%s]" % repos.map{ |r| r.path.to_s }.join("],[")
+            end
+
+            if repos.length == 0
+                raise "Error: No backup device attached!" 
+            end
+
+            repos[0]
+        end
+
+
         def self.load( config_file )
-           self.new.instance_eval( config_file.open.read, config_file, 0 )
+           config = self.new
+           config.instance_eval( config_file.open.read, config_file.to_s, 0 )
+           config
         end
     end
 
@@ -128,11 +144,12 @@ module BupRunner
         fattr :dry_run => false
         fattr :verbose => false
 
-        def initialize( target, repo )
+        def initialize( repo, target  )
             @target = target
             @repo = repo
             @exclude_file = Pathname.new( "#{ENV['HOME']}/tmp/bup_exclude_list" )
         end
+
 
         def path
             target.path
@@ -155,7 +172,7 @@ module BupRunner
             if @repo.attached? 
                 if !@repo.init?
                     cmd = "bup init" 
-                    run(cmd)
+                    run(cmd, true)
                 end
             end
         end
@@ -165,10 +182,10 @@ module BupRunner
             if !target.exclude_path.empty?
                 FileUtils.mkdir_p "#{ENV['HOME']}/tmp"
                 @exclude_file.open("w") do |fd|
-                    fd.write( target.exclude_path.join("\n") )
+                    fd.write( target.exclude_path.map{|f| (@target.path + f).to_s }.join("\n") )
                 end
 
-                "--exclude_file=#{@exclude_file.to_s}"
+                "--exclude-from=#{@exclude_file.to_s}"
             else
                 ""
             end
@@ -177,7 +194,7 @@ module BupRunner
         def index
             init
             cmd = ( "bup index -f #{index_path} -uxpm #{exclude_opt} #{path}" )
-            run( cmd )
+            run( cmd, true )
         end
 
         def save
@@ -186,12 +203,16 @@ module BupRunner
             run( cmd )
         end
 
-        def run(cmd)
+        def run(cmd, raise_on_error = false)
             if verbose?
                 puts cmd
             end
             if !dry_run?
-                system(cmd)
+                if !system(cmd)
+                    if raise_on_error 
+                        raise "#{cmd} failed"
+                    end
+                end
             end
         end
     end

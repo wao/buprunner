@@ -50,6 +50,10 @@ Main do
         validate{ |p| p.exist? && p.file? }
     end
 
+    option 'dry-run' do
+        optional
+    end
+
     def config_file 
         if params[:config].given?
             params[:config]
@@ -65,14 +69,56 @@ Main do
     mode 'dump' do
         def run
             parse_config
-            @config.targets.each do |t|
-                puts "Target: %s" % t.name
-                puts "  path: %s" % t.path
+            @config.targets.values.each do |t|
+                puts "Target: %s" % [t.name]
+                puts "  path: %s" % [t.path]
                 puts
             end
 
-            @config.repos.each do |r|
-                puts "Repos: %s" % t.name
+            @config.repos.values.each do |t|
+                puts "Repos: %s" % [t.path]
+            end
+        end
+    end
+
+    mode 'backup' do
+        argument 'target_name'
+
+        option 'verbose' do
+            optional
+        end
+
+        option 'index-only' do
+            optional
+        end
+
+        option 'save-only' do
+            optional
+        end
+        
+        def run
+            parse_config
+            target = @config.targets.values.find{ |r| r.name == params[:target_name].value }
+            if target.nil?
+                raise "Can't found backup target for name %s" % [ params[:target_name].value ]
+            end
+
+            driver = BupDriver.new( @config.select_repo, target )
+            if params["dry-run"].given?
+                driver.dry_run = true
+                driver.verbose = true
+            end
+
+            if params[:verbose].given?
+                driver.verbose = true
+            end
+
+            if !params['save-only'].given?
+                driver.index
+            end
+
+            if !params['index-only'].given?
+                driver.save
             end
         end
     end
